@@ -7,7 +7,7 @@ C++11 で追加されたもの
 
 
 
-```cpp hello.cpp {.line-number .copy}
+```cpp
 
 #include <iostream>
 
