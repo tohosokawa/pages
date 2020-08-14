@@ -4,8 +4,8 @@
 
 | container名 | メソッド | タイミング |
 |---|---|:---|
-|vector |emplace_back |capacityを超えてメモリの再確保が必要になったとき。 |
-|vector |push_back | capacityを超えてメモリの再確保が必要になったとき。<br>メソッド実行時。 |
+|vector |emplace_back |要素数がcapacityを超えてメモリの再確保が必要になったとき。 |
+|vector |push_back | 要素数がcapacityを超えてメモリの再確保が必要になったとき。<br>メソッド実行時。 |
 |deque |emplace_back | 発生しない。 |
 |deque |push_back | メソッド実行時。 |
 
