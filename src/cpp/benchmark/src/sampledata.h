@@ -1,5 +1,10 @@
+#ifndef __SAMPLEDATA_H__
+#define __SAMPLEDATA_H__
+
 #include <cstring>
 #include <memory>
+
+#include "param.h"
 
 #ifdef SAMPLE_DATA_SHARED
 class Data {
@@ -42,3 +47,5 @@ class SampleData {
   char* mem;
 };
 #endif  // SAMPLE_DATA_SHARED
+
+#endif  // __SAMPLEDATA_H__
