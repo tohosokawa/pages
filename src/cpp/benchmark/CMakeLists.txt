@@ -11,4 +11,3 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O2 -ggdb")
 
 add_executable(container src/benchmark_container.cpp)
 target_link_libraries(container benchmark::benchmark)
-
