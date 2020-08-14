@@ -2,6 +2,9 @@ project(hello_world)
 
 cmake_minimum_required(VERSION 3.13)
 find_package(benchmark REQUIRED)
+#add_subdirectory(gtest/benchmark)
+find_package(GTest REQUIRED)
+
 
 set(CMAKE_BUILD_TYPE RELEASE)
 set(CMAKE_CXX_FLAGS "-O0 -Wall -std=c++11")
@@ -16,3 +19,7 @@ add_executable(valarray valarray.cpp)
 
 add_executable(benchmark benchmark.cpp)
 target_link_libraries(benchmark benchmark::benchmark)
+
+add_executable(container benchmark_container.cpp)
+target_link_libraries(container benchmark::benchmark)
+

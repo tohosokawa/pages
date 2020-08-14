@@ -1,2 +1,2 @@
 #!/bin/bash
-clang-format -i `find *.cpp -type f`
+clang-format -i `find *\.{cpp,h} -type f`
