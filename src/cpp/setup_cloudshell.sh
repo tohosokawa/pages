@@ -2,11 +2,14 @@
 
 sudo apt-get -y install clang-format
 
-if [ ! -d "library/benchmark" ]; then
+cd library
+if [ ! -d "benchmark" ]; then
   # Control will enter here if $DIRECTORY doesn't exist.
-  cd library && ./install.sh
-  cd -
+  ./install.sh
 fi
+cd -
 
 cd library/benchmark/build && sudo make install
+cd -
+cd library/benchmark/googletest/build && sudo make install
 cd -

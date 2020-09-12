@@ -1,4 +1,6 @@
 builddir := build
+OBJ := heap_main
+SRC := src/heap_main.cpp
 
 all: format run
 
@@ -7,13 +9,12 @@ format:
 
 cmake:
 	mkdir -p $(builddir)
-	cd $(builddir) && cmake ..
 
 build: cmake
-	cd $(builddir) && make
+	cd $(builddir) && g++ -o ./${OBJ} -std=c++11 ../${SRC}
 
 run: build
-	cd $(builddir) && ./container
+	cd $(builddir) && ./${OBJ} 19 1050
 
 clean:
 	rm -rf $(builddir)

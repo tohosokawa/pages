@@ -13,7 +13,7 @@ build: cmake
 	cd $(builddir) && make
 
 run: build
-	cd $(builddir) && ./container
+	cd $(builddir) && ./vector
 
 clean:
 	rm -rf $(builddir)
