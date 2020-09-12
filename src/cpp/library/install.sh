@@ -13,4 +13,10 @@ mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release ../
 # Build the library.
 # Use make -j<number_of_parallel_jobs> to speed up the build process, e.g. make -j8 .
-make
+make -j8
+
+cd ..
+mkdir googletest/build && cd googletest/build
+cmake -DCMAKE_BUILD_TYPE=Release ../
+make -j8
+
