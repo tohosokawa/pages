@@ -148,10 +148,13 @@ TEST(ListenersTest, LeaksMalloc2) {
          mused - s);
 }
 
-TEST(ListenersTest, LeaksNew) {
+class ParamTeset : public ::testing::TestWithParam<int> {};
+
+TEST_P(ParamTeset, LeaksNew) {
   //   size_t s = 1024 * 1;
   //   size_t s = 8 * 8;
-  size_t s = 32 * 3;
+
+  size_t s = GetParam();
   auto ini = mallinfo();
   showMallInfo(ini);
 
@@ -165,7 +168,10 @@ TEST(ListenersTest, LeaksNew) {
 
   printf("Requested size %zu, used space %d, overhead %zu\n", s, mused,
          mused - s);
+  ASSERT_NE(0, mused);
 }
+
+INSTANTIATE_TEST_CASE_P(IntTest, ParamTeset, testing::Range(110, 140));
 
 }  // namespace
 
