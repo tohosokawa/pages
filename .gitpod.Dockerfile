@@ -21,12 +21,12 @@ RUN git clone https://github.com/google/googletest.git benchmark/googletest
 RUN mkdir -p benchmark/build
 RUN cd benchmark/build && cmake -DCMAKE_BUILD_TYPE=Release ../
 RUN cd benchmark/build && make -j8
-RUN cd benchmark/build && make install
+RUN cd benchmark/build && sudo make install
 # install gtest
 RUN mkdir -p benchmark/googletest/build
 RUN cd benchmark/googletest/build && cmake -DCMAKE_BUILD_TYPE=Release ../
 RUN cd benchmark/googletest/build && make -j8
-RUN cd benchmark/googletest/build && make install
+RUN cd benchmark/googletest/build && sudo make install
 # clean
 RUN rm -rf benchmark
 #####################################
