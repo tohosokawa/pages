@@ -10,9 +10,8 @@
         "uordblks"
     ],
     "ignorePaths": [
-        ".vscode",        // this will ignore anything the node_modules directory
-        "**/build/**",  // the same for this one
-        "**/library/**",  // the same for this one
-        ".git"                // Ignore the .git directory
+        "**/build/**",
+        "**/library/**",
+        ".git"
     ]  
 }
