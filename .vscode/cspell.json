@@ -1,0 +1,17 @@
+{
+    "version": "0.1",
+    "words": [
+        "chroot",
+        "crostini",
+        "fordblks",
+        "hblkhd",
+        "hblks",
+        "smblks",
+        "uordblks"
+    ],
+    "ignorePaths": [
+        "**/build/**",
+        "**/library/**",
+        ".git"
+    ]  
+}
