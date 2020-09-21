@@ -4,22 +4,6 @@
 
 ### Show current git branch in bash prompt
 
-Download `git-prompt.sh` to your home directory.
-
-```bash
-cd ~
-# download git-prompt.sh
-wget -O .git-prompt.sh https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
-# or 
-curl -o .git-prompt.sh https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
-```
-
-Add the following line to the end of `.bashrc`
-
-```bash
-source ~/.git-prompt.sh
-```
-
 - Chromebook crostini case
 
 Original format
@@ -46,3 +30,28 @@ else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
 ```
+### Git command completion
+
+<strong>Maybe, your environment does not need this setting.</strong>
+
+- sh case
+
+Download `git-prompt.sh` to your home directory.
+
+```bash
+cd ~
+# download git-prompt.sh
+wget -O .git-prompt.sh https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
+# or 
+curl -o .git-prompt.sh https://raw.githubusercontent.com/git/git/master/contrib/completion/git-prompt.sh
+
+# Add the following line to the end of `.bashrc`
+echo "source ~/.git-completion.sh" >> ~/.bashrc
+```
+
+- Other case
+
+See the contents of following link.
+
+https://github.com/git/git/tree/master/contrib/completion
+
