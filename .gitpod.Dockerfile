@@ -31,3 +31,4 @@ RUN cd benchmark/googletest/build && sudo make install
 RUN rm -rf benchmark
 #####################################
 
+RUN apt-get install -y libeigen3-dev
