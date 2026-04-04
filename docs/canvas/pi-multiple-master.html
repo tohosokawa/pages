@@ -12,7 +12,6 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // 1. importを削除し、グローバルなReactから必要な機能を取り出します
     const { useState, useEffect, useCallback, useMemo } = React;
 
     // --- データ定義 ---
@@ -43,25 +42,17 @@
       return newArr;
     };
 
-    // LocalStorageのキー
     const STORAGE_KEY_USERS = 'pi_master_users';
     const STORAGE_KEY_RECORDS = 'pi_master_records';
 
     // --- メインコンポーネント ---
-    // 2. export default を削除しました
     function App() {
-      // アプリケーション全体の状態
-      const [appState, setAppState] = useState('userSelect'); // 'userSelect', 'menu', 'playing', 'result', 'history'
-      
-      // ユーザー管理
+      const [appState, setAppState] = useState('userSelect'); 
       const [users, setUsers] = useState([]);
       const [currentUser, setCurrentUser] = useState(null);
       const [newUserName, setNewUserName] = useState('');
-      
-      // 記録管理
       const [records, setRecords] = useState([]);
 
-      // ゲーム状態
       const [mode, setMode] = useState('normal'); 
       const [questions, setQuestions] = useState([]);
       const [currentIndex, setCurrentIndex] = useState(0);
@@ -102,7 +93,22 @@
         return () => clearInterval(timerId);
       }, [appState, startTime]);
 
-      // ユーザー追加
+      // ✅ 追加: ゲーム終了時（appStateが'result'になった時）に記録を計算して保存
+      useEffect(() => {
+        if (appState === 'result' && questions.length > 0) {
+          const totalSeconds = elapsedTime / 1000;
+          const avgTime = totalSeconds / questions.length;
+          let rank = 'C';
+          
+          if (avgTime <= 2.0 && mistakeCount === 0) rank = 'S';
+          else if (avgTime <= 3.0 && mistakeCount <= 2) rank = 'A';
+          else if (avgTime <= 4.5) rank = 'B';
+
+          saveRecord(totalSeconds, mistakeCount, rank);
+        }
+      }, [appState]); // 状態が変化した時だけ実行される
+
+      // ユーザー追加・削除
       const handleAddUser = (e) => {
         e.preventDefault();
         if (!newUserName.trim()) return;
@@ -141,7 +147,7 @@
         setRecords(prev => [...prev, newRecord]);
       };
 
-      // --- ゲームロジック ---
+      // ゲームロジック
       const generateQuestions = (selectedMode) => {
         let newQuestions = [];
         if (selectedMode === 'beginner') {
@@ -248,8 +254,6 @@
       };
 
       // --- UIコンポーネント ---
-
-      // 1. ユーザー選択画面
       const renderUserSelect = () => (
         <div className="flex flex-col items-center justify-center p-6 w-full space-y-8">
           <div className="text-center space-y-2">
@@ -304,7 +308,6 @@
         </div>
       );
 
-      // 2. メインメニュー
       const renderMenu = () => (
         <div className="flex flex-col items-center justify-center space-y-6 p-6 w-full">
           <div className="w-full flex justify-between items-center bg-blue-50 px-4 py-2 rounded-full mb-2">
@@ -353,7 +356,6 @@
         </div>
       );
 
-      // 3. プレイ画面
       const renderPlaying = () => {
         const currentQ = questions[currentIndex];
         if (!currentQ) return null;
@@ -421,11 +423,11 @@
         );
       };
 
-      // 4. 結果画面
       const renderResult = () => {
         const totalSeconds = elapsedTime / 1000;
         const avgTime = totalSeconds / questions.length;
         
+        // UI表示用のランク再計算
         let rank = 'C';
         let rankColor = 'text-gray-500';
         let message = 'もっと練習して覚えよう！';
@@ -438,9 +440,7 @@
           rank = 'B'; rankColor = 'text-blue-500'; message = 'よくがんばった！';
         }
 
-        useEffect(() => {
-          saveRecord(totalSeconds, mistakeCount, rank);
-        }, []);
+        // 🚨 ここにあった useEffect は削除しました！
 
         return (
           <div className="flex flex-col items-center justify-center p-6 space-y-8 w-full">
@@ -490,7 +490,6 @@
         );
       };
 
-      // 5. 履歴（成長の記録）画面
       const renderHistory = () => {
         const userRecords = records.filter(r => r.user === currentUser);
         
