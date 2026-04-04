@@ -10,4 +10,4 @@
 
 ## canvasで作成したアプリ
 
-- [pi-multiple-master](./canvas/pi-multiple-master.html)
+- [pi-multiple-master](./canvas/pi-multiple-master.html): 円周率(3.14)の倍数を覚えるためのアプリ
