@@ -32,7 +32,7 @@
       ]);
 
       const [spendAndSave, setSpendAndSave] = useState({
-        isActive: true, threshold: 3000, discount: 300, maxDiscount: 900
+        isActive: false, threshold: 3000, discount: 300, maxDiscount: 900
       });
 
       // --- 新規追加用ステート ---
@@ -626,6 +626,13 @@
                           </div>
                         ))}
                       </div>
+                    </div>
+                    <div className="mt-6 pt-4 border-t border-gray-100 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg flex items-start gap-2">
+                      <span className="text-sm shrink-0">ℹ️</span>
+                      <p>
+                        当シミュレーターの計算結果は目安です。為替レートの変動やセラー独自の割引、コイン割引などにより実際の請求額と異なる場合があります。<br />
+                        <strong className="text-gray-700">決済を完了する前に、必ずAliExpressの画面で最終的な価格をご確認ください。</strong>
+                      </p>
                     </div>
                   </div>
                 ) : (
