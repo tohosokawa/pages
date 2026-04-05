@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AliExpress クーポン適用シミュレーター</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%232563eb'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%23ffffff' font-family='sans-serif'%3E🛒%3C/text%3E%3C/svg%3E">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const CHOICE_FREE_SHIPPING_THRESHOLD = 1500;
+    const CHOICE_SHIPPING_FEE = 300;
+    const STORAGE_KEY_SAVES = 'aliexpress_simulator_saves'; // LocalStorage用のキー
+
+    function App() {
+      // --- データステート ---
+      const [items, setItems] = useState([
+        { id: 1, name: '商品A (スマートウォッチ)', price: 4000, shipping: 0, isChoice: false, isBundle: false, isActive: true },
+        { id: 2, name: '商品B (激安ケーブル)', price: 300, shipping: 0, isChoice: true, isBundle: true, isActive: true },
+        { id: 3, name: '商品C (激安フィルム)', price: 200, shipping: 0, isChoice: true, isBundle: true, isActive: true },
+      ]);
+
+      const [coupons, setCoupons] = useState([
+        { id: 1, minSpend: 5000, discount: 1000, isActive: true },
+      ]);
+
+      const [spendAndSave, setSpendAndSave] = useState({
+        isActive: true, threshold: 3000, discount: 300, maxDiscount: 900
+      });
+
+      // --- 新規追加用ステート ---
+      const [newItemName, setNewItemName] = useState('');
+      const [newItemPrice, setNewItemPrice] = useState('');
+      const [newItemShipping, setNewItemShipping] = useState('');
+      const [newItemIsChoice, setNewItemIsChoice] = useState(false);
+      const [newItemIsBundle, setNewItemIsBundle] = useState(false);
+      
+      const [newCouponMin, setNewCouponMin] = useState('');
+      const [newCouponDiscount, setNewCouponDiscount] = useState('');
+
+      // --- 編集用ステート ---
+      const [editingItemId, setEditingItemId] = useState(null);
+      const [editItemData, setEditItemData] = useState(null);
+      const [editingCouponId, setEditingCouponId] = useState(null);
+      const [editCouponData, setEditCouponData] = useState(null);
+
+      // --- 計算・システム用ステート ---
+      const [result, setResult] = useState(null);
+      const [isCalculating, setIsCalculating] = useState(false);
+      const [showDataModal, setShowDataModal] = useState(false);
+      
+      const itemNameInputRef = useRef(null);
+      const couponMinInputRef = useRef(null);
+
+      // --- セーブ用ステート (LocalStorage) ---
+      const [saves, setSaves] = useState([]);
+      const [saveName, setSaveName] = useState('');
+      const [dataText, setDataText] = useState(''); 
+
+      // 初期データ（セーブ一覧）の読み込み
+      useEffect(() => {
+        const savedData = localStorage.getItem(STORAGE_KEY_SAVES);
+        if (savedData) {
+          try {
+            setSaves(JSON.parse(savedData));
+          } catch (e) {
+            console.error("セーブデータの読み込みに失敗しました", e);
+          }
+        }
+      }, []);
+
+      // --- 割引率計算関数 ---
+      const getDiscountRate = (discount, minSpend) => {
+        if (!minSpend || minSpend <= 0) return 0;
+        return Math.round((discount / minSpend) * 1000) / 10;
+      };
+
+      // --- アイテム・クーポンの追加・削除・切替 ---
+      const addItem = () => {
+        if (!newItemName || !newItemPrice) return;
+        if (items.length >= 10) return alert('10個までです');
+        const isChoiceFinal = newItemIsBundle ? true : newItemIsChoice;
+        setItems([...items, { 
+          id: Date.now(), name: newItemName, price: parseInt(newItemPrice, 10), 
+          shipping: parseInt(newItemShipping, 10) || 0, isChoice: isChoiceFinal, isBundle: newItemIsBundle, isActive: true 
+        }]);
+        setNewItemName(''); setNewItemPrice(''); setNewItemShipping(''); setNewItemIsChoice(false); setNewItemIsBundle(false);
+        setTimeout(() => itemNameInputRef.current?.focus(), 0);
+      };
+
+      const addCoupon = () => {
+        if (!newCouponMin || !newCouponDiscount) return;
+        setCoupons([...coupons, { id: Date.now(), minSpend: parseInt(newCouponMin, 10), discount: parseInt(newCouponDiscount, 10), isActive: true }]);
+        setNewCouponMin(''); setNewCouponDiscount('');
+        setTimeout(() => couponMinInputRef.current?.focus(), 0);
+      };
+
+      const removeItem = (id) => setItems(items.filter(item => item.id !== id));
+      const removeCoupon = (id) => setCoupons(coupons.filter(coupon => coupon.id !== id));
+      const toggleItemActive = (id) => setItems(items.map(item => item.id === id ? { ...item, isActive: !item.isActive } : item));
+      const toggleCouponActive = (id) => setCoupons(coupons.map(coupon => coupon.id === id ? { ...coupon, isActive: !coupon.isActive } : coupon));
+
+      // --- 編集機能 ---
+      const startEditItem = (item) => { setEditingItemId(item.id); setEditItemData({ ...item }); };
+      const saveEditItem = () => {
+        setItems(items.map(i => i.id === editingItemId ? { ...editItemData, isChoice: editItemData.isBundle ? true : editItemData.isChoice } : i));
+        setEditingItemId(null); setEditItemData(null);
+      };
+      const cancelEditItem = () => { setEditingItemId(null); setEditItemData(null); };
+
+      const startEditCoupon = (coupon) => { setEditingCouponId(coupon.id); setEditCouponData({ ...coupon }); };
+      const saveEditCoupon = () => {
+        setCoupons(coupons.map(c => c.id === editingCouponId ? editCouponData : c));
+        setEditingCouponId(null); setEditCouponData(null);
+      };
+      const cancelEditCoupon = () => { setEditingCouponId(null); setEditCouponData(null); };
+
+      // --- ローカルセーブ機能 (Import/Export) ---
+      const handleSaveToLocal = () => {
+        const name = saveName.trim() || `構成案 ${new Date().toLocaleTimeString().slice(0, 5)}`;
+        const newSave = {
+          id: Date.now().toString(),
+          name: name,
+          data: JSON.stringify({ items, coupons, spendAndSave }),
+          updatedAt: Date.now()
+        };
+        const newSaves = [newSave, ...saves];
+        setSaves(newSaves);
+        localStorage.setItem(STORAGE_KEY_SAVES, JSON.stringify(newSaves));
+        setSaveName('');
+        alert(`「${name}」として保存しました！`);
+      };
+
+      const handleLoadFromLocal = (save) => {
+        if (!window.confirm(`「${save.name}」を読み込みますか？\n現在のカート内容は上書きされます。`)) return;
+        try {
+          const data = JSON.parse(save.data);
+          if (data.items && data.coupons) {
+            setItems(data.items.map(item => ({...item, isActive: item.isActive !== false, shipping: item.shipping || 0, isChoice: item.isChoice || false, isBundle: item.isBundle || false})));
+            setCoupons(data.coupons.map(coupon => ({...coupon, isActive: coupon.isActive !== false})));
+            if(data.spendAndSave) setSpendAndSave(data.spendAndSave);
+            setResult(null); setShowDataModal(false); 
+            alert('データを読み込みました！');
+          }
+        } catch (error) { alert('読み込みエラー：データが破損しています。'); }
+      };
+
+      const handleDeleteLocalSave = (id) => {
+        if (!window.confirm('このセーブデータを削除しますか？')) return;
+        const newSaves = saves.filter(s => s.id !== id);
+        setSaves(newSaves);
+        localStorage.setItem(STORAGE_KEY_SAVES, JSON.stringify(newSaves));
+      };
+
+      // 文字列コピー（共有・バックアップ用）
+      const copySaveData = (text) => {
+        const el = document.createElement('textarea');
+        el.value = text;
+        document.body.appendChild(el);
+        el.select();
+        try { 
+          document.execCommand('copy'); 
+          alert('データをテキストとしてコピーしました！\nメモ帳などに貼り付けて保管できます。'); 
+        } 
+        catch (err) { alert('コピーに失敗しました。'); }
+        document.body.removeChild(el);
+      };
+
+      // テキスト(JSON)からの復元
+      const loadFromText = () => {
+        if (!dataText.trim()) return;
+        try {
+          const data = JSON.parse(dataText);
+          if (data.items && data.coupons) {
+            setItems(data.items.map(item => ({...item, isActive: item.isActive !== false, shipping: item.shipping || 0, isChoice: item.isChoice || false, isBundle: item.isBundle || false})));
+            setCoupons(data.coupons.map(coupon => ({...coupon, isActive: coupon.isActive !== false})));
+            if(data.spendAndSave) setSpendAndSave(data.spendAndSave);
+            setResult(null); setShowDataModal(false); setDataText('');
+            alert('テキストからデータを復元しました！');
+          }
+        } catch (error) { alert('読み込みエラー：正しいデータ形式ではありません。'); }
+      };
+
+      // --- 計算ロジック ---
+      const calculateOptimal = () => {
+        setIsCalculating(true);
+        setTimeout(() => {
+          const activeItems = items.filter(i => i.isActive);
+          const activeCoupons = coupons.filter(c => c.isActive).sort((a, b) => b.minSpend - a.minSpend);
+
+          if (activeItems.length === 0) { setResult(null); setIsCalculating(false); return; }
+
+          const getBestCoupon = (amount) => activeCoupons.find(c => amount >= c.minSpend) || { discount: 0, minSpend: 0 };
+          const getSpendAndSaveDiscount = (amount) => {
+            if (!spendAndSave.isActive || spendAndSave.threshold <= 0) return 0;
+            return Math.min(spendAndSave.maxDiscount, Math.floor(amount / spendAndSave.threshold) * spendAndSave.discount);
+          };
+
+          let bestCost = Infinity;
+          let bestPartition = [];
+
+          const generatePartitions = (index, currentPartition) => {
+            if (index === activeItems.length) {
+              let totalCost = 0; let isValidPartition = true; const currentEvaluation = [];
+
+              for (const group of currentPartition) {
+                const subtotal = group.reduce((sum, item) => sum + item.price, 0);
+                
+                const bundleItemsCount = group.filter(i => i.isBundle).length;
+                const hasBundleError = bundleItemsCount > 0 && bundleItemsCount < 3;
+                if (hasBundleError) isValidPartition = false;
+
+                const choiceSum = group.reduce((sum, item) => sum + (item.isChoice ? item.price : 0), 0);
+                const nonChoiceShipping = group.reduce((sum, item) => sum + (!item.isChoice ? item.shipping : 0), 0);
+                const choiceShipping = (choiceSum > 0 && choiceSum < CHOICE_FREE_SHIPPING_THRESHOLD) ? CHOICE_SHIPPING_FEE : 0;
+                const totalShipping = nonChoiceShipping + choiceShipping;
+
+                const ssDiscount = getSpendAndSaveDiscount(subtotal);
+                const appliedCoupon = getBestCoupon(subtotal);
+                
+                const finalCost = subtotal + totalShipping - ssDiscount - appliedCoupon.discount;
+                totalCost += finalCost;
+
+                currentEvaluation.push({
+                  items: [...group], subtotal, totalShipping, ssDiscount, bundleItemsCount, hasBundleError,
+                  couponApplied: appliedCoupon.discount > 0 ? appliedCoupon : null, finalCost
+                });
+              }
+
+              const evaluationCost = isValidPartition ? totalCost : Infinity;
+              if (evaluationCost < bestCost || (bestCost === Infinity && currentEvaluation.length > 0)) {
+                bestCost = evaluationCost; bestPartition = currentEvaluation;
+              }
+              return;
+            }
+
+            const item = activeItems[index];
+            currentPartition.push([item]); generatePartitions(index + 1, currentPartition); currentPartition.pop();
+            for (let i = 0; i < currentPartition.length; i++) {
+              currentPartition[i].push(item); generatePartitions(index + 1, currentPartition); currentPartition[i].pop();
+            }
+          };
+
+          generatePartitions(0, []);
+
+          const partitionWithSuggestions = bestPartition.map(group => {
+            const suggestions = [];
+            if (group.hasBundleError) {
+              suggestions.push({ type: 'error', message: `⚠️ 【決済不可】3点まとめ買い商品が ${group.bundleItemsCount} 点しかありません。あと ${3 - group.bundleItemsCount} 点追加してください。` });
+            }
+            if (spendAndSave.isActive && spendAndSave.threshold > 0) {
+              const currentSSDiscount = getSpendAndSaveDiscount(group.subtotal);
+              if (currentSSDiscount < spendAndSave.maxDiscount) {
+                const nextThreshold = (Math.floor(group.subtotal / spendAndSave.threshold) + 1) * spendAndSave.threshold;
+                const shortfallSS = nextThreshold - group.subtotal;
+                if (shortfallSS <= spendAndSave.discount) {
+                   suggestions.push({ type: 'good_deal', message: `自動割引まであと ¥${shortfallSS.toLocaleString()}！追加すると ¥${spendAndSave.discount.toLocaleString()} 自動オフされます。` });
+                }
+              }
+            }
+            return { ...group, suggestions };
+          });
+
+          const totalSubtotal = activeItems.reduce((sum, item) => sum + item.price, 0);
+          const totalChoiceSum = activeItems.reduce((sum, item) => sum + (item.isChoice ? item.price : 0), 0);
+          const totalShippingAll = activeItems.reduce((sum, item) => sum + (!item.isChoice ? item.shipping : 0), 0) + 
+                                   ((totalChoiceSum > 0 && totalChoiceSum < CHOICE_FREE_SHIPPING_THRESHOLD) ? CHOICE_SHIPPING_FEE : 0);
+          const totalSSDiscount = getSpendAndSaveDiscount(totalSubtotal);
+          const singleOrderCoupon = getBestCoupon(totalSubtotal);
+          const singleOrderCost = totalSubtotal + totalShippingAll - totalSSDiscount - singleOrderCoupon.discount;
+
+          setResult({
+            totalSubtotal, singleOrderCost, optimalCost: bestCost === Infinity ? singleOrderCost : bestCost,
+            optimalPartition: partitionWithSuggestions, savedAmount: bestCost === Infinity ? 0 : singleOrderCost - bestCost,
+            activeItemsCount: activeItems.length, hasGlobalError: bestCost === Infinity
+          });
+
+          setIsCalculating(false);
+        }, 10);
+      };
+
+      useEffect(() => { setResult(null); }, [items, coupons, spendAndSave]);
+      useEffect(() => { calculateOptimal(); }, []);
+
+      const inputClass = "w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 text-sm outline-none";
+
+      return (
+        <div className="min-h-screen bg-gray-50 p-4 md:p-8 font-sans text-gray-800">
+          
+          {/* ローカルセーブ管理モーダル */}
+          {showDataModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-50 rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center p-4 border-b bg-white">
+                  <h3 className="font-bold flex items-center gap-2 text-lg">
+                    <span>📂</span> セーブデータ管理
+                  </h3>
+                  <button onClick={() => setShowDataModal(false)} className="text-gray-400 hover:text-gray-700 bg-gray-100 rounded-full p-1"><span className="text-sm">❌</span></button>
+                </div>
+                
+                <div className="p-4 overflow-y-auto flex-1 space-y-6">
+                  
+                  {/* 新規保存 */}
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                    <h4 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                      <span>💾</span> 現在のカートを新しく保存
+                    </h4>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="セーブ名 (例: 独身の日ガジェット構成案)" 
+                        value={saveName}
+                        onChange={e => setSaveName(e.target.value)}
+                        className="flex-1 p-2 border border-blue-200 rounded focus:ring-2 focus:ring-blue-500 text-sm outline-none" 
+                      />
+                      <button onClick={handleSaveToLocal} className="bg-blue-600 text-white px-5 py-2 rounded font-bold hover:bg-blue-700 transition-colors shadow-sm">保存</button>
+                    </div>
+                  </div>
+
+                  {/* 保存済み一覧 */}
+                  <div>
+                    <h4 className="font-bold text-gray-700 mb-3 flex items-center justify-between">
+                      <span>保存済みデータ一覧 ({saves.length}件)</span>
+                      <span className="text-xs font-normal text-gray-500 bg-gray-200 px-2 py-1 rounded-full">ブラウザに保存されます</span>
+                    </h4>
+                    {saves.length === 0 ? (
+                      <div className="text-center py-8 bg-white rounded-xl border border-gray-200 text-gray-400">
+                        <div className="text-5xl mx-auto mb-2 opacity-30">📂</div>
+                        <p>保存されたデータはありません</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {saves.map(save => (
+                          <div key={save.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border border-gray-200 rounded-lg bg-white shadow-sm gap-3">
+                            <div className="flex-1">
+                              <div className="font-bold text-gray-800 text-sm md:text-base">{save.name}</div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {new Date(save.updatedAt).toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="flex gap-2 w-full sm:w-auto">
+                              <button onClick={() => handleLoadFromLocal(save)} className="flex-1 sm:flex-none px-4 py-2 bg-green-500 text-white rounded text-sm font-bold hover:bg-green-600 transition-colors">読込</button>
+                              <button onClick={() => copySaveData(save.data)} className="flex-1 sm:flex-none px-3 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded text-sm font-bold hover:bg-gray-200 flex justify-center items-center gap-1 transition-colors">
+                                <span>📋</span> <span className="sm:hidden">コピー</span>
+                              </button>
+                              <button onClick={() => handleDeleteLocalSave(save.id)} className="px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded text-sm hover:bg-red-100 transition-colors"><span>🗑️</span></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* テキストからの復元 */}
+                  <div className="pt-2 border-t border-gray-200">
+                    <h4 className="font-bold text-gray-700 mb-2 text-sm flex items-center gap-2">
+                      <span>📄</span> テキスト(JSON)から復元
+                    </h4>
+                    <div className="flex gap-2">
+                       <input 
+                          type="text" 
+                          value={dataText} 
+                          onChange={e => setDataText(e.target.value)} 
+                          placeholder="コピーした文字列を貼り付け" 
+                          className="flex-1 p-2 border border-gray-300 rounded text-sm outline-none focus:ring-2 focus:ring-gray-400" 
+                       />
+                       <button onClick={loadFromText} className="bg-gray-800 text-white px-4 py-2 rounded text-sm font-bold hover:bg-gray-700">復元</button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* --- メインUI --- */}
+          <div className="max-w-5xl mx-auto space-y-6">
+            <header className="text-center pb-4 border-b border-gray-200">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex flex-wrap items-center justify-center gap-2">
+                <span>🧮</span> AliExpress 完全版シミュレーター
+              </h1>
+              <p className="text-gray-500 mt-2 text-sm">割引率(コスパ)も一目でわかる、最安の買い方導き出しツール。</p>
+              <div className="mt-4">
+                <button onClick={() => setShowDataModal(true)} className="px-6 py-2 bg-white border-2 border-blue-200 rounded-full text-sm font-bold text-blue-700 hover:bg-blue-50 shadow-sm transition-colors flex items-center justify-center gap-2 mx-auto">
+                  <span>📂</span> セーブデータ管理
+                </button>
+              </div>
+            </header>
+
+            {/* 自動割引設定 */}
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-xl border border-purple-100 flex flex-col md:flex-row items-center gap-4 justify-between shadow-sm">
+              <div className="flex items-center gap-3">
+                 <button onClick={() => setSpendAndSave({...spendAndSave, isActive: !spendAndSave.isActive})} className={`w-11 h-6 rounded-full transition-colors flex items-center px-1 shrink-0 ${spendAndSave.isActive ? 'bg-purple-500' : 'bg-gray-300'}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${spendAndSave.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                 <div className="flex items-center gap-2"><span className={`text-xl ${spendAndSave.isActive ? 'opacity-100' : 'opacity-50 grayscale'}`}>⚡</span><span className="font-bold">自動割引 (Spend & Save)</span></div>
+              </div>
+              <div className={`flex items-center flex-wrap justify-center gap-2 text-sm ${!spendAndSave.isActive && 'opacity-50 pointer-events-none'}`}>
+                 <input type="number" value={spendAndSave.threshold} onChange={e => setSpendAndSave({...spendAndSave, threshold: Number(e.target.value)})} className="w-20 p-1.5 border rounded outline-none" /> 円ごとに
+                 
+                 {/* 自動割引の割引率表示 */}
+                 <div className="flex items-center gap-1">
+                   <input type="number" value={spendAndSave.discount} onChange={e => setSpendAndSave({...spendAndSave, discount: Number(e.target.value)})} className="w-16 p-1.5 border rounded text-purple-600 font-bold outline-none" /> 
+                   <span>円オフ</span>
+                   {spendAndSave.threshold > 0 && spendAndSave.discount > 0 && (
+                     <span className="bg-purple-100 text-purple-700 text-xs font-bold px-1.5 py-0.5 rounded ml-1">
+                       {getDiscountRate(spendAndSave.discount, spendAndSave.threshold)}%
+                     </span>
+                   )}
+                 </div>
+                 
+                 <span className="text-gray-500 text-xs ml-2">(上限: <input type="number" value={spendAndSave.maxDiscount} onChange={e => setSpendAndSave({...spendAndSave, maxDiscount: Number(e.target.value)})} className="w-16 p-1 border rounded outline-none" /> 円)</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 左：入力エリア */}
+              <div className="space-y-6">
+                
+                {/* --- 商品リスト --- */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-semibold flex items-center gap-2 mb-4"><span>🛒</span>カート ({items.filter(i => i.isActive).length}/{items.length})</h2>
+                  
+                  <ul className="space-y-2 mb-4">
+                    {items.map(item => (
+                      <li key={item.id} className={`rounded-lg border transition-all duration-200 ${item.isActive ? 'bg-white border-blue-200 shadow-sm' : 'bg-gray-100 border-gray-200 opacity-60 grayscale'}`}>
+                        {editingItemId === item.id ? (
+                          /* 編集モードのUI */
+                          <div className="p-3 bg-blue-50/50 flex flex-col gap-2">
+                            <input value={editItemData.name} onChange={e => setEditItemData({...editItemData, name: e.target.value})} className={inputClass} placeholder="商品名" />
+                            <div className="flex gap-2">
+                              <input type="number" value={editItemData.price} onChange={e => setEditItemData({...editItemData, price: Number(e.target.value)})} className={inputClass} placeholder="価格" />
+                              <input type="number" value={editItemData.shipping} onChange={e => setEditItemData({...editItemData, shipping: Number(e.target.value)})} className={inputClass} placeholder="送料" />
+                            </div>
+                            <div className="flex justify-between items-center mt-1 flex-wrap gap-2">
+                              <div className="flex gap-2">
+                                <label className="flex items-center gap-1.5 text-xs font-bold text-yellow-700 cursor-pointer bg-yellow-50 px-2 py-1.5 rounded border border-yellow-200">
+                                  <input type="checkbox" checked={editItemData.isChoice} onChange={e => setEditItemData({...editItemData, isChoice: e.target.checked})} className="accent-yellow-500" /> Choice
+                                </label>
+                                <label className="flex items-center gap-1.5 text-xs font-bold text-red-700 cursor-pointer bg-red-50 px-2 py-1.5 rounded border border-red-200">
+                                  <input type="checkbox" checked={editItemData.isBundle} onChange={e => setEditItemData({...editItemData, isBundle: e.target.checked})} className="accent-red-500" /> 3点縛り
+                                </label>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={cancelEditItem} className="px-3 py-1.5 text-sm text-gray-600 bg-white border rounded hover:bg-gray-50">ｷｬﾝｾﾙ</button>
+                                <button onClick={saveEditItem} className="px-3 py-1.5 text-sm text-white bg-blue-600 rounded hover:bg-blue-700 font-bold">更新</button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* 通常表示モードのUI */
+                          <div className="flex justify-between items-center p-3">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => toggleItemActive(item.id)} className={`w-10 h-5 rounded-full px-1 shrink-0 ${item.isActive ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                                <div className={`w-3 h-3 rounded-full bg-white transition-transform ${item.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                              </button>
+                              <div onClick={() => startEditItem(item)} className="cursor-pointer group">
+                                <span className={`font-medium text-sm md:text-base group-hover:text-blue-600 transition-colors ${!item.isActive && 'line-through text-gray-500'}`}>{item.name}</span>
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                  {item.isBundle && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded">3点縛り</span>}
+                                  {item.isChoice && !item.isBundle && <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-1.5 py-0.5 rounded">Choice</span>}
+                                  {item.shipping > 0 && <span className="text-[10px] text-gray-500 flex items-center gap-0.5"><span>📦</span>送料: ¥{item.shipping}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <span className="font-semibold text-sm md:text-base">¥{item.price.toLocaleString()}</span>
+                              <button onClick={() => startEditItem(item)} className="text-gray-400 hover:text-blue-500 text-sm">✏️</button>
+                              <button onClick={() => removeItem(item.id)} className="text-gray-400 hover:text-red-500 text-sm">🗑️</button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* 新規商品追加フォーム */}
+                  <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div className="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><span>➕</span> 新しい商品を追加</div>
+                    <input ref={itemNameInputRef} placeholder="商品名" value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} className={inputClass} />
+                    <div className="flex gap-2">
+                      <input type="number" placeholder="価格" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} className={inputClass} />
+                      <input type="number" placeholder="個別送料(無=0)" value={newItemShipping} onChange={e => setNewItemShipping(e.target.value)} onKeyDown={e => e.key === 'Enter' && addItem()} className={inputClass} />
+                    </div>
+                    <div className="flex justify-between items-center mt-1 flex-wrap gap-2">
+                      <div className="flex gap-2">
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-yellow-700 cursor-pointer bg-yellow-50 px-2 py-1.5 rounded border border-yellow-200">
+                          <input type="checkbox" checked={newItemIsChoice} onChange={e => setNewItemIsChoice(e.target.checked)} className="accent-yellow-500" /> Choice
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-red-700 cursor-pointer bg-red-50 px-2 py-1.5 rounded border border-red-200">
+                          <input type="checkbox" checked={newItemIsBundle} onChange={e => {setNewItemIsBundle(e.target.checked); if(e.target.checked) setNewItemIsChoice(true);}} className="accent-red-500" /> 3点縛り
+                        </label>
+                      </div>
+                      <button onClick={addItem} disabled={items.length >= 10} className="bg-gray-800 text-white px-4 py-1.5 rounded-lg hover:bg-gray-700 font-bold text-sm">追加(Enter)</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* --- クーポンリスト --- */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                  <h2 className="text-lg font-semibold flex items-center gap-2 mb-4"><span>🏷️</span>クーポン</h2>
+                  <ul className="space-y-2 mb-4">
+                    {coupons.map(coupon => (
+                      <li key={coupon.id} className={`rounded-lg border transition-all duration-200 ${coupon.isActive ? 'bg-red-50 border-red-200' : 'bg-gray-100 border-gray-200 opacity-60'}`}>
+                        {editingCouponId === coupon.id ? (
+                           /* 編集モードのUI */
+                           <div className="p-3 bg-red-50/50 flex flex-col gap-2">
+                             <div className="flex gap-2">
+                                <input type="number" value={editCouponData.minSpend} onChange={e => setEditCouponData({...editCouponData, minSpend: Number(e.target.value)})} className={inputClass} placeholder="条件額" />
+                                <input type="number" value={editCouponData.discount} onChange={e => setEditCouponData({...editCouponData, discount: Number(e.target.value)})} className={inputClass} placeholder="割引額" />
+                             </div>
+                             <div className="flex justify-end gap-2 mt-1">
+                                <button onClick={cancelEditCoupon} className="px-3 py-1.5 text-sm text-gray-600 bg-white border rounded hover:bg-gray-50">ｷｬﾝｾﾙ</button>
+                                <button onClick={saveEditCoupon} className="px-3 py-1.5 text-sm text-white bg-red-500 rounded hover:bg-red-600 font-bold">更新</button>
+                             </div>
+                           </div>
+                        ) : (
+                          /* 通常表示モードのUI */
+                          <div className="flex justify-between items-center p-3">
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => toggleCouponActive(coupon.id)} className={`w-10 h-5 rounded-full px-1 shrink-0 ${coupon.isActive ? 'bg-red-500' : 'bg-gray-300'}`}>
+                                <div className={`w-3 h-3 rounded-full bg-white transition-transform ${coupon.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                              </button>
+                              <span onClick={() => startEditCoupon(coupon)} className="font-medium text-sm cursor-pointer hover:text-red-600">¥{coupon.minSpend.toLocaleString()} 以上</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {/* 割引額と割引率の表示 */}
+                              <div className="flex flex-col items-end">
+                                <span className="font-bold text-red-600">-¥{coupon.discount.toLocaleString()}</span>
+                                <span className="text-[10px] text-red-400 font-bold bg-white px-1 rounded border border-red-100">
+                                  {getDiscountRate(coupon.discount, coupon.minSpend)}% OFF
+                                </span>
+                              </div>
+                              <button onClick={() => startEditCoupon(coupon)} className="text-gray-400 hover:text-red-500 text-sm">✏️</button>
+                              <button onClick={() => removeCoupon(coupon.id)} className="text-gray-400 hover:text-red-500 text-sm">🗑️</button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  
+                  {/* 新規クーポン追加フォーム */}
+                  <div className="flex gap-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <input ref={couponMinInputRef} type="number" placeholder="条件額" value={newCouponMin} onChange={e => setNewCouponMin(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCoupon()} className={inputClass} />
+                    <input type="number" placeholder="割引額" value={newCouponDiscount} onChange={e => setNewCouponDiscount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCoupon()} className={inputClass} />
+                    <button onClick={addCoupon} className="bg-red-500 text-white px-3 rounded hover:bg-red-600 transition-colors flex items-center justify-center"><span>➕</span></button>
+                  </div>
+                </div>
+
+                <button onClick={calculateOptimal} disabled={isCalculating} className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-md hover:bg-blue-700 flex justify-center gap-2 transition-colors">
+                  {isCalculating ? '計算中...' : '最安パターンを計算する'}
+                </button>
+              </div>
+
+              {/* 右：結果エリア */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                {result ? (
+                  <div className="space-y-6">
+                    
+                    {result.hasGlobalError ? (
+                      <div className="p-5 rounded-xl border bg-red-50 border-red-200">
+                         <h3 className="text-lg font-bold flex items-center gap-2 mb-2 text-red-700"><span>⚠️</span> 決済できない商品が含まれています！</h3>
+                        <p className="text-sm text-red-600">「3点縛り」の商品が3点未満のため、このままでは購入できません。ダミー商品を追加するか、OFFにしてください。</p>
+                      </div>
+                    ) : (
+                      <div className={`p-5 rounded-xl border ${result.savedAmount > 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <h3 className="text-lg font-bold flex items-center gap-2 mb-2">
+                          {result.savedAmount > 0 ? <><span>✅</span> 分割した方が安い！</> : <><span>⚠️</span> まとめて買った方が良いです</>}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                          <div>
+                            <p className="text-sm text-gray-500">全てまとめた場合(送料込)</p>
+                            <p className="text-xl font-semibold text-gray-800 line-through">¥{result.singleOrderCost.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">最適分割の場合(送料込)</p>
+                            <p className="text-2xl font-bold text-red-600">¥{result.optimalCost.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h3 className="text-md font-bold border-b pb-2 mb-4">購入手順（{result.activeItemsCount}商品）</h3>
+                      <div className="space-y-4">
+                        {result.optimalPartition.map((group, index) => (
+                          <div key={index} className={`border rounded-lg shadow-sm relative overflow-hidden ${group.hasBundleError ? 'border-red-300' : 'border-gray-200'}`}>
+                            <div className={`absolute top-0 left-0 w-1 h-full ${group.hasBundleError ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                            <div className={`p-4 ${group.hasBundleError ? 'bg-red-50/30' : 'bg-white'}`}>
+                              <h4 className={`font-bold mb-2 ${group.hasBundleError ? 'text-red-800' : 'text-blue-800'}`}>決済 {index + 1}</h4>
+                              <ul className="space-y-1 mb-3">
+                                {group.items.map(item => (
+                                  <li key={item.id} className="text-sm text-gray-600 flex justify-between">
+                                    <span>・{item.name} {item.isBundle && <span className="text-[10px] text-red-500 ml-1">(縛り)</span>}</span>
+                                    <span>¥{item.price.toLocaleString()}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <div className="flex justify-between items-end border-t border-gray-100 pt-3">
+                                <div className="text-xs text-gray-500 space-y-1">
+                                  <p>商品計: ¥{group.subtotal.toLocaleString()}</p>
+                                  {group.totalShipping > 0 && <p className="text-orange-600">送料計: +¥{group.totalShipping.toLocaleString()}</p>}
+                                  {group.ssDiscount > 0 && <p className="text-purple-600 font-bold">自動割引: -¥{group.ssDiscount.toLocaleString()}</p>}
+                                  {group.couponApplied && <p className="text-red-500 font-bold">クーポン: -¥{group.couponApplied.discount.toLocaleString()}</p>}
+                                </div>
+                                <div className="text-lg font-bold text-gray-900">支払額: ¥{group.finalCost.toLocaleString()}</div>
+                              </div>
+                            </div>
+
+                            {group.suggestions && group.suggestions.map((suggestion, i) => (
+                              <div key={i} className={`p-3 text-xs flex items-start gap-2 border-t
+                                ${suggestion.type === 'error' ? 'bg-red-100 text-red-800 border-red-200 font-bold' : 
+                                  suggestion.type === 'good_deal' ? 'bg-purple-50 text-purple-800 border-purple-200' : 'bg-gray-50'}`}>
+                                {suggestion.type === 'error' ? <span className="shrink-0 mt-0.5 text-sm">⚠️</span> : <span className="shrink-0 mt-0.5 text-sm">💡</span>}
+                                <div>{suggestion.message}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 p-8">
+                    <div className="text-6xl opacity-20 mb-4">🧮</div>
+                    <p>商品をセットして再計算を押してください</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
